@@ -113,17 +113,17 @@ void haar1d_cpu(float *vec, int n, int w)
 	for(i=0;i<n;i++)
 		vecp[i] = 0;
 
-		w/=2;
-		for(i=0;i<w;i++)
-		{
-			vecp[i] = (vec[2*i] + vec[2*i+1])/sqrt_2;
-			vecp[i+w] = (vec[2*i] - vec[2*i+1])/sqrt_2;
-		}
-		
-		for(i=0;i<(w*2);i++)
-			vec[i] = vecp[i];
+	w/=2;
+	for(i=0;i<w;i++)
+	{
+		vecp[i] = (vec[2*i] + vec[2*i+1])/sqrt_2;
+		vecp[i+w] = (vec[2*i] - vec[2*i+1])/sqrt_2;
+	}
+	
+	for(i=0;i<(w*2);i++)
+		vec[i] = vecp[i];
 
-		delete [] vecp;
+	delete [] vecp;
 }
 
 void haar2d_cpu(float **matrix, int size)
