@@ -9,19 +9,35 @@ using namespace std;
 
 const double sqrt_2 = 1.4142135;
 
-__global__ void cal_haar(float input[], float output [], int o_width, int o_height)
+__global__ void haar_horizontal(float input[], float output [], int o_width, int w)
 { 
 	int x_index = blockIdx.x*blockDim.x+threadIdx.x; 
 	int y_index = blockIdx.y*blockDim.y+threadIdx.y; 
 
-	if(x_index>=(o_width+1)/2 || y_index>=o_height) return; 
+	if(x_index>=(w+1)/2 || y_index>=w) return; 
 
 	int i_thread_id = y_index*o_width + 2*x_index;
 	int o_thread_id = y_index*o_width + x_index;
 
 	const double sqrt_2 = 1.4142135;
 	output[o_thread_id] = (input[i_thread_id]+input[i_thread_id+1])/sqrt_2;
-	output[o_thread_id+o_width/2] = (input[i_thread_id]-input[i_thread_id+1])/sqrt_2;
+	output[o_thread_id+w/2] = (input[i_thread_id]-input[i_thread_id+1])/sqrt_2;
+} 
+ 
+__global__ void haar_vertical(float input[], float output [], int o_width, int w)
+{ 
+	int x_index = blockIdx.x*blockDim.x+threadIdx.x; 
+	int y_index = blockIdx.y*blockDim.y+threadIdx.y; 
+
+	if(y_index>=(w+1)/2 || x_index>=w) return; 
+
+	int p1 = 2*y_index*o_width + x_index;
+	int p2 = (2*y_index+1)*o_width + x_index;
+	int p3 = y_index*o_width + x_index;
+
+	const double sqrt_2 = 1.4142135;
+	output[p3] = (input[p1]+input[p2])/sqrt_2;
+	output[p3+o_width*w/2] = (input[p1]-input[p2])/sqrt_2;
 } 
  
 void haar(float input[], float output [], int o_width, int o_height)
@@ -38,49 +54,32 @@ void haar(float input[], float output [], int o_width, int o_height)
 
 	dim3 blocksize(16,16);
 	dim3 gridsize;
-	gridsize.x=(o_width+blocksize.x-1)/blocksize.x;
-	gridsize.y=(o_height+blocksize.y-1)/blocksize.y;
 
-	cal_haar<<<gridsize,blocksize>>>(d_input,d_output,o_width,o_height);
+	int w = o_width;
+	gridsize.x=(w+blocksize.x-1)/blocksize.x;
+	gridsize.y=(w+blocksize.y-1)/blocksize.y;
 
-	cudaMemcpy(output,d_output,widthstep*o_height,cudaMemcpyDeviceToHost);
+	while(w>1)
+	{
+		haar_horizontal<<<gridsize,blocksize>>>(d_input,d_output,o_width,w);
+		haar_vertical<<<gridsize,blocksize>>>(d_output,d_input,o_width,w);
+		w /= 2;
+	}
+
+	cudaMemcpy(output,d_input,widthstep*o_height,cudaMemcpyDeviceToHost);
 
 	cudaFree(d_input);
 	cudaFree(d_output);
 }
 
-void haar2d_gpu(float** matrix, int size)
+float* haar2d_gpu(float* input, int size)
 {
 	int w = size;
-	float* input = new float[size*size];
 	float* output = new float[size*size];
 
-	while(w>1)
-	{
-		// horizontal
-		for (int i = 0; i < w; i++)
-			for (int j = 0; j < w; j++)
-				input[i*w+j] = matrix[i][j];
+	haar(input, output, w, w);
 
-		haar(input, output, w, w);
-
-		for (int i = 0; i < w; i++)
-			for (int j = 0; j < w; j++)
-				matrix[i][j] = output[i*w+j];
-
-		// vertical
-		for (int i = 0; i < w; i++)
-			for (int j = 0; j < w; j++)
-				input[i*w+j] = matrix[j][i];
-
-		haar(input, output, w, w);
-
-		for (int i = 0; i < w; i++)
-			for (int j = 0; j < w; j++)
-				matrix[j][i] = output[i*w+j];
-
-		w/=2;
-	}
+	return output;
 }
 
 void printMatrix(float** mat, int size)
@@ -156,33 +155,32 @@ int main(int argc, char **argv)
 
 	// Input matrix
 	int size = 2048;
+	float* vec = new float[size*size];
+	for (int i = 0; i < size*size; i++)
+		fin >> vec[i];
+	fin.close();
+
+	// Haar transform with GPU
+	timer.start();
+	vec = haar2d_gpu(vec, size);
+	timer.stop();
+	cout << "GPU Time: " << timer.getElapsedTimeInMilliSec() << " ms" << endl;
+	//printVector(vec, size);
+
 	float** mat = new float*[size];
-	float** mat2 = new float*[size];
-	for(int m = 0; m < size; m++) {
+	for(int m = 0; m < size; m++)
 		mat[m] = new float[size];
-		mat2[m] = new float[size];
-	}
 
 	for (int i = 0; i < size; i++)
-		for (int j = 0; j < size; j++) {
-			fin >> mat[i][j];
-			mat2[i][j] = mat[i][j];
-		}
-	fin.close();
+		for (int j = 0; j < size; j++)
+			mat[i][j] = vec[i*size+j];
 
 	// Haar transform with CPU
 	timer.start();
 	haar2d_cpu(mat, size);
 	timer.stop();
 	cout << "CPU Time: " << timer.getElapsedTimeInMilliSec() << " ms" << endl;
-	// printMatrix(mat, size);
-
-	// Haar transform with GPU
-	timer.start();
-	haar2d_gpu(mat2, size);
-	timer.stop();
-	cout << "GPU Time: " << timer.getElapsedTimeInMilliSec() << " ms" << endl;
-	//printMatrix(mat2, size);
+	//printMatrix(mat, size);
 
 	cin.get();
 
