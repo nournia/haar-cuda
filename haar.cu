@@ -72,14 +72,12 @@ void haar(float input[], float output [], int o_width, int o_height)
 	cudaFree(d_output);
 }
 
-float* haar2d_gpu(float* input, int size)
+void haar2d_gpu(float* input, int size)
 {
 	int w = size;
 	float* output = new float[size*size];
 
 	haar(input, output, w, w);
-
-	return output;
 }
 
 void printMatrix(float** mat, int size)
@@ -89,6 +87,19 @@ void printMatrix(float** mat, int size)
 	{
 		for(int j = 0; j < size; j++)
 			fout << mat[i][j] << " ";
+		fout << endl;
+	}
+	fout << endl;
+	fout.close();
+}
+
+void printVector(float* vec, int size)
+{
+	ofstream fout("gpu.txt");
+	for(int i = 0; i < size; i++)
+	{
+		for(int j = 0; j < size; j++, i++)
+			fout << vec[i] << " ";
 		fout << endl;
 	}
 	fout << endl;
@@ -162,7 +173,7 @@ int main(int argc, char **argv)
 
 	// Haar transform with GPU
 	timer.start();
-	vec = haar2d_gpu(vec, size);
+	haar2d_gpu(vec, size);
 	timer.stop();
 	cout << "GPU Time: " << timer.getElapsedTimeInMilliSec() << " ms" << endl;
 	//printVector(vec, size);
